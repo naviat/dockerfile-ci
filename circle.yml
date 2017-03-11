@@ -1,41 +1,86 @@
 machine:
   environment:
-    MAJOR_VERSION_TAG: 2
+    MAJOR_VERSION_TAG: 3
     PACKER_VERSION_TAG: latest
     TERRAFORM_VERSION_TAG: latest
-    CI_DEST_DIR: 'node_files'
+    NODE_VERSION_TAG: 2.0.0
+    DOCKER_BIN_TAG: 'node-2.0.0'
     CI_CONTAINER_NAME: 'unifio-ci'
-    CI_NODE_IMAGE_NAME: 'unifio/ci:node-2.0.0'
-    CI_SCRIPT_DEBUG: 1
     TF_IMAGE: 'unifio/terraform'
     PKR_IMAGE: 'unifio/packer'
-
+    CI_IMAGE_NAME: 'unifio/ci'
+    CI_NODE_IMAGE_NAME: 'unifio/ci:node-2.0.0'
   services:
     - docker
 
 dependencies:
+  pre:
+    - sudo apt-get install jq
   cache_directories:
     - "~/docker"
   override:
     - docker info
-    - ./copybins.sh
-    - if [[ -e ~/docker/image.tar ]]; then docker load --input ~/docker/image.tar; fi
-    - docker build -t unifio/ci .
-    - mkdir -p ~/docker; docker save unifio/ci > ~/docker/image.tar
+    - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
+    - >
+      if [[ $(./tagexists.sh ${CI_IMAGE_NAME}) == "1" ]];then
+        ./copybins.sh node && \
+        export ALL_BINARIES_INSTALLED="${ALL_BINARIES_INSTALLED}:node:npm"
+      fi
+    - >
+      if [[ $(DOCKER_BIN_TAG="${TERRAFORM_VERSION_TAG}" ./tagexists.sh ${TF_IMAGE}) == "1" ]];then
+        ./copybins.sh terraform && \
+        export ALL_BINARIES_INSTALLED="${ALL_BINARIES_INSTALLED}:terraform"
+      fi
+    - >
+      if [[ $(DOCKER_BIN_TAG="${PACKER_VERSION_TAG}" ./tagexists.sh ${PKR_IMAGE}) == "1" ]];then
+        ./copybins.sh packer && export ALL_BINARIES_INSTALLED="${ALL_BINARIES_INSTALLED}:packer"
+      fi
+    - >
+      if [[ -e ~/docker/image.tar ]]; then
+        docker load --input ~/docker/image.tar
+      fi
+    - >
+      if echo "${ALL_BINARIES_INSTALLED}" | grep -q node; then
+        docker build -f Dockerfile-node --rm=false -t "${CI_IMAGE_NAME}" .
+      else
+        docker build --rm=false -t "${CI_IMAGE_NAME}" .
+      fi
+    - mkdir -p ~/docker; docker save "${CI_IMAGE_NAME}" > ~/docker/image.tar
 
 test:
   override:
-    - docker run --entrypoint /bin/sh unifio/ci -c "gem list | grep covalence"
-    - docker run --entrypoint /bin/sh unifio/ci -c "aws --version"
-    - docker run -e CHECKPOINT_DISABLE=1 --entrypoint /bin/sh unifio/ci -c "packer version"
-    - docker run -e CHECKPOINT_DISABLE=1 --entrypoint /bin/sh unifio/ci -c "terraform version"
-    - docker run --entrypoint /bin/sh unifio/ci -c "node --version"
-    - docker run --entrypoint /bin/sh unifio/ci -c "npm --version"
-
+    - docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "gem list | grep covalence"
+    - docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "aws --version"
+    - >
+      if echo "${ALL_BINARIES_INSTALLED}" | grep -q packer; then
+        docker run -e CHECKPOINT_DISABLE=1 \
+          --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "packer version"
+      fi
+    - >
+      if echo "${ALL_BINARIES_INSTALLED}" | grep -q terraform; then
+        docker run -e CHECKPOINT_DISABLE=1 \
+          --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "terraform version"
+      fi
+    - >
+      if echo "${ALL_BINARIES_INSTALLED}" | grep -q node; then
+        docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "node --version"
+      fi
+    - >
+      if echo "${ALL_BINARIES_INSTALLED}" | grep -q npm; then
+        docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "npm --version"
+      fi
 deployment:
   hub:
     branch: master
     commands:
       - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
-      - docker tag -f `docker images unifio/ci | grep -E 'unifio/ci' | grep -v 'node-2.0.0' | awk '{print $3}'` unifio/ci:${MAJOR_VERSION_TAG}.0.${CIRCLE_BUILD_NUM}
-      - docker push unifio/ci
+      - >
+        IMAGE_TO_TAG=$(docker images | grep -E "${CI_IMAGE_NAME}" | grep -v "${DOCKER_BIN_TAG}" | awk '{print $3}')
+        if echo "${ALL_BINARIES_INSTALLED}" | grep -q node; then
+          docker tag "${IMAGE_TO_TAG}" \
+          "${CI_IMAGE_NAME}":${MAJOR_VERSION_TAG}.0.${CIRCLE_BUILD_NUM}
+        else
+          docker tag "${IMAGE_TO_TAG}" \
+          "${CI_IMAGE_NAME}":${MAJOR_VERSION_TAG}.0.${CIRCLE_BUILD_NUM}
+        fi
+      - docker push "${CI_IMAGE_NAME}"

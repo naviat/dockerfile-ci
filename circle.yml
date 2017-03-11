@@ -46,9 +46,11 @@ dependencies:
         docker build --rm=false -t "${CI_IMAGE_NAME}" .
       fi
     - mkdir -p ~/docker; docker save "${CI_IMAGE_NAME}" > ~/docker/image.tar
+    - echo ${ALL_BINARIES_INSTALLED} > ~/.allbinaries
 
 test:
   override:
+    - export ALL_BINARIES_INSTALLED=$(cat ~/.allbinaries)
     - docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "gem list | grep covalence"
     - docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "aws --version"
     - >
@@ -73,6 +75,7 @@ deployment:
   hub:
     branch: master
     commands:
+      - export ALL_BINARIES_INSTALLED=$(cat ~/.allbinaries)
       - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
       - >
         IMAGE_TO_TAG=$(docker images | grep -E "${CI_IMAGE_NAME}" | grep -v "${DOCKER_BIN_TAG}" | awk '{print $3}')

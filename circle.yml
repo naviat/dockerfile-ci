@@ -24,30 +24,30 @@ dependencies:
     - >
       if [[ $(./tagexists.sh ${CI_IMAGE_NAME}) == "1" ]];then
         ./copybins.sh node && \
-        export ALL_BINARIES_INSTALLED="${ALL_BINARIES_INSTALLED}:node:npm"
+        echo node >> ~/.allbinaries && echo npm >> ~/.allbinaries
       fi
     - >
       if [[ $(DOCKER_BIN_TAG="${TERRAFORM_VERSION_TAG}" ./tagexists.sh ${TF_IMAGE}) == "1" ]];then
         ./copybins.sh terraform && \
-        export ALL_BINARIES_INSTALLED="${ALL_BINARIES_INSTALLED}:terraform"
+        echo terraform >> ~/.allbinaries
       fi
     - >
       if [[ $(DOCKER_BIN_TAG="${PACKER_VERSION_TAG}" ./tagexists.sh ${PKR_IMAGE}) == "1" ]];then
-        ./copybins.sh packer && export ALL_BINARIES_INSTALLED="${ALL_BINARIES_INSTALLED}:packer"
+        ./copybins.sh packer && \
+        echo packer >> ~/.allbinaries
       fi
     - >
       if [[ -e ~/docker/image.tar ]]; then
         docker load --input ~/docker/image.tar
       fi
     - >
-      if echo "${ALL_BINARIES_INSTALLED}" | grep -q node; then
+      if grep -q node ~/.allbinaries; then
         docker build -f Dockerfile-node --rm=false -t "${CI_IMAGE_NAME}" .
       else
         docker build --rm=false -t "${CI_IMAGE_NAME}" .
       fi
     - mkdir -p ~/docker; docker save "${CI_IMAGE_NAME}" > ~/docker/image.tar
-    - echo ${ALL_BINARIES_INSTALLED} > ~/.allbinaries
-
+    - cat ~/.allbinaries
 test:
   override:
     - docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "gem list | grep covalence"
@@ -70,6 +70,7 @@ test:
       if grep -q npm ~/.allbinaries; then
         docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "npm --version"
       fi
+    - cat ~/.allbinaries
 deployment:
   hub:
     branch: master
@@ -85,3 +86,4 @@ deployment:
           "${CI_IMAGE_NAME}":${MAJOR_VERSION_TAG}.0.${CIRCLE_BUILD_NUM}
         fi
       - docker push "${CI_IMAGE_NAME}"
+      - cat ~/.allbinaries

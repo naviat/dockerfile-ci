@@ -3,13 +3,13 @@ machine:
     MAJOR_VERSION_TAG: 3
     PACKER_VERSION_TAG: latest
     TERRAFORM_VERSION_TAG: latest
-    NODE_VERSION_TAG: 2.0.0
-    DOCKER_BIN_TAG: 'node-2.0.0'
+    NODE_VERSION_TAG: 2.0.3
+    DOCKER_BIN_TAG: 'node-2.0.3'
     CI_CONTAINER_NAME: 'unifio-ci'
     TF_IMAGE: 'unifio/terraform'
     PKR_IMAGE: 'unifio/packer'
     CI_IMAGE_NAME: 'unifio/ci'
-    CI_NODE_IMAGE_NAME: 'unifio/ci:node-2.0.0'
+    CI_NODE_IMAGE_NAME: 'unifio/ci:node-2.0.3'
   services:
     - docker
 

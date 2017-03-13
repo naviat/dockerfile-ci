@@ -50,36 +50,34 @@ dependencies:
 
 test:
   override:
-    - export ALL_BINARIES_INSTALLED=$(cat ~/.allbinaries)
     - docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "gem list | grep covalence"
     - docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "aws --version"
     - >
-      if echo "${ALL_BINARIES_INSTALLED}" | grep -q packer; then
+      if grep -q packer ~/.allbinaries; then
         docker run -e CHECKPOINT_DISABLE=1 \
           --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "packer version"
       fi
     - >
-      if echo "${ALL_BINARIES_INSTALLED}" | grep -q terraform; then
+      if grep -q terraform ~/.allbinaries; then
         docker run -e CHECKPOINT_DISABLE=1 \
           --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "terraform version"
       fi
     - >
-      if echo "${ALL_BINARIES_INSTALLED}" | grep -q node; then
+      if grep -q node ~/.allbinaries; then
         docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "node --version"
       fi
     - >
-      if echo "${ALL_BINARIES_INSTALLED}" | grep -q npm; then
+      if grep -q npm ~/.allbinaries; then
         docker run --entrypoint /bin/sh "${CI_IMAGE_NAME}" -c "npm --version"
       fi
 deployment:
   hub:
     branch: master
     commands:
-      - export ALL_BINARIES_INSTALLED=$(cat ~/.allbinaries)
       - docker login -e $DOCKER_EMAIL -u $DOCKER_USER -p $DOCKER_PASS
       - >
         IMAGE_TO_TAG=$(docker images | grep -E "${CI_IMAGE_NAME}" | grep -v "${DOCKER_BIN_TAG}" | awk '{print $3}')
-        if echo "${ALL_BINARIES_INSTALLED}" | grep -q node; then
+        if grep -q node ~/.allbinaries; then
           docker tag "${IMAGE_TO_TAG}" \
           "${CI_IMAGE_NAME}":${MAJOR_VERSION_TAG}.0.${CIRCLE_BUILD_NUM}
         else
